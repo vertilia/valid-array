@@ -61,7 +61,7 @@ class ValidArrayTest extends TestCase
             [['name' => \FILTER_VALIDATE_URL], 'name', 'a.b.c/d/e.f', false],
             [['name' => ['filter'=>\FILTER_VALIDATE_IP, 'flags'=>\FILTER_FLAG_IPV4]], 'name', '1.2.3.4', '1.2.3.4'],
             [['name' => ['filter'=>\FILTER_VALIDATE_IP, 'flags'=>\FILTER_FLAG_IPV6]], 'name', '1.2.3.4', false],
-            [['name' => ['filter'=>\FILTER_VALIDATE_EMAIL, 'flags'=>\FILTER_FORCE_ARRAY]], 'name', 'abc@def.ghi', ['abc@def.ghi']],
+            [['name' => ['filter'=>\FILTER_VALIDATE_EMAIL, 'flags'=>\FILTER_FORCE_ARRAY]], 'name', 'a@b.c', ['a@b.c']],
         ];
     }
 }

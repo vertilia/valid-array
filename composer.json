@@ -1,0 +1,23 @@
+{
+  "name": "vertilia/valid-array",
+  "description": "Object with automatic items validation based on standard filtering mechanism of php",
+  "license": "BSD",
+  "type": "library",
+  "autoload": {
+    "exclude-from-classmap": [
+      "/tests/"
+    ],
+    "psr-4": {
+      "Vertilia\\ValidArray\\": "src/"
+    }
+  },
+  "config": {
+    "optimize-autoloader": true
+  },
+  "require": {
+    "php": "^7.1"
+  },
+  "suggest": {
+    "phpunit/phpunit": "To run tests"
+  }
+}

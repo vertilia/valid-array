@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Vertilia\ValidArray;
 
-class ValidArray implements \ArrayAccess, \Countable, \IteratorAggregate
+class ValidArray extends \ArrayObject
 {
     /** @var array */
     protected $filters = [];
@@ -44,12 +44,10 @@ class ValidArray implements \ArrayAccess, \Countable, \IteratorAggregate
                 }
 
                 // store validated
-                $this->args_valid = $validated;
+                parent::__construct($validated);
             }
         }
     }
-
-    // ArrayAccess interface
 
     /**
      * Sets argument by filtering it if corresponding filter is set. Unsets if filtering breaks.
@@ -68,39 +66,10 @@ class ValidArray implements \ArrayAccess, \Countable, \IteratorAggregate
                 [$index => $this->filters[$index]]
             );
             if (\is_array($validated) and \array_key_exists($index, $validated)) {
-                $this->args_valid[$index] = $validated[$index];
+                parent::offsetSet($index, $validated[$index]);
             } else {
-                unset($this->args_valid[$index]);
+                parent::offsetUnset($index);
             }
         }
-    }
-
-    public function offsetGet($index)
-    {
-        return $this->args_valid[$index] ?? null;
-    }
-
-    public function offsetExists($index): bool
-    {
-        return isset($this->args_valid[$index]);
-    }
-
-    public function offsetUnset($index)
-    {
-        unset($this->args_valid[$index]);
-    }
-
-    // Countable interface
-
-    public function count(): int
-    {
-        return \count($this->args_valid);
-    }
-
-    // IteratorAggregate interface
-
-    public function getIterator(): \Traversable
-    {
-        return new \ArrayIterator($this->args_valid);
     }
 }

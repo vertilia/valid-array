@@ -46,6 +46,10 @@ class ValidArrayTest extends TestCase
             $this->assertEquals($v, $expected);
         }
 
+        // json_encode
+        $json = \json_encode($valid);
+        $this->assertEquals(\json_encode([$name => $expected]), $json);
+
         // ArrayAccess, Countable
         unset($valid[$name]);
         $this->assertCount(0, $valid);

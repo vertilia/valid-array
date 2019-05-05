@@ -3,12 +3,17 @@ declare(strict_types=1);
 
 namespace Vertilia\ValidArray;
 
+/**
+ * Array object with predefined filters that filter data on insertion. Only keys with defined filters may be set.
+ * Filters are defined on object instantiation and cannot be modified.
+ * Filtering capacities are using standard php extention ext_filter.
+ *
+ * @see https://php.net/filter_var_array
+ */
 class ValidArray extends \ArrayObject
 {
     /** @var array */
     protected $filters = [];
-    /** @var array */
-    protected $args_valid = [];
 
     /**
      * @param array $filters filtering structure as defined for filter_var_array() php function, ex: {
@@ -25,17 +30,18 @@ class ValidArray extends \ArrayObject
      *  },
      *  ...
      * }
-     * @param array $args_raw
+     * @param array $args_raw raw data to validate on array initialization
+     * @param bool $add_empty whether to add missing values as NULL
      * @see https://php.net/filter_var_array
      */
-    public function __construct(array $filters, array $args_raw = [])
+    public function __construct(array $filters, array $args_raw = [], bool $add_empty = true)
     {
         // set filters
         $this->filters = $filters;
 
         // if raw arguments provided, filter them
         if (!empty($args_raw)) {
-            $validated = \filter_var_array((array)$args_raw, $this->filters);
+            $validated = \filter_var_array((array)$args_raw, $this->filters, $add_empty);
             if (\is_array($validated)) {
                 foreach ($validated as $k => &$v) {
                     if (!isset($v) and isset($this->filters[$k]['options']['default'])) {
@@ -55,7 +61,6 @@ class ValidArray extends \ArrayObject
      *
      * @param string $index
      * @param mixed $value
-     * @throws \UnexpectedValueException
      */
     public function offsetSet($index, $value)
     {

@@ -8,7 +8,7 @@ namespace Vertilia\ValidArray;
  *
  * @see https://php.net/filter_var_array
  */
-class MutableValidArray extends ValidArray
+class MutableValidArray extends ValidArray implements MutableFiltersInterface
 {
     /**
      * Sets new filters for data. Revalidates current values. Current values not present in $filters will be unset.

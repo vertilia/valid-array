@@ -18,7 +18,8 @@ class MutableValidArrayTest extends TestCase
             ['name' => \FILTER_SANITIZE_STRING],
             ['name' => 'value']
         );
-        $this->assertInstanceOf(MutableValidArray::class, $valid);
+        $this->assertInstanceOf(ValidArray::class, $valid);
+        $this->assertInstanceOf(MutableFiltersInterface::class, $valid);
         $this->assertEquals('value', $valid['name']);
 
         // set new filter, revalidate value (add_empty == true)

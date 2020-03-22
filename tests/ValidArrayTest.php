@@ -98,6 +98,7 @@ class ValidArrayTest extends TestCase
             [['ip' => ['filter'=>\FILTER_VALIDATE_IP, 'flags'=>\FILTER_FLAG_IPV4]], 'ip', '1.2.3.4', '1.2.3.4'],
             [['ip' => ['filter'=>\FILTER_VALIDATE_IP, 'flags'=>\FILTER_FLAG_IPV6]], 'ip', '1.2.3.4', false],
             [['email' => ['filter'=>\FILTER_VALIDATE_EMAIL, 'flags'=>\FILTER_FORCE_ARRAY]], 'email', 'a@b.c', ['a@b.c']],
+            [['names' => ['filter'=>\FILTER_SANITIZE_STRING, 'flags'=>\FILTER_REQUIRE_ARRAY]], 'names', ['value1', 'value2'], ['value1', 'value2']],
             [['tel' => $tel_filter], 'tel', '123-02-03', '123-02-03'],
             [['tel' => $tel_filter], 'tel', 'unknown', '+00 (0)0 00 00 00 00'],
             [['val' => $callback_filter], 'val', '_unknown_', '_unknown_'],

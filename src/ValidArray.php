@@ -56,8 +56,7 @@ class ValidArray extends \ArrayObject
     }
 
     /**
-     * Sets argument by filtering it if corresponding filter is set. Unsets if filtering breaks.
-     * Ignores if filter not set.
+     * Sets argument by filtering it if corresponding filter is set. Ignores if filter not set.
      *
      * @param string $index
      * @param mixed $value
@@ -66,15 +65,12 @@ class ValidArray extends \ArrayObject
     {
         // if filter for $index is defined, filter the argument
         if (isset($this->filters[$index])) {
-            $validated = \filter_var_array(
-                [$index => $value],
-                [$index => $this->filters[$index]]
+            $validated = \filter_var(
+                $value,
+                isset($this->filters[$index]['filter']) ? $this->filters[$index]['filter'] : $this->filters[$index],
+                is_array($this->filters[$index]) ? $this->filters[$index] : null
             );
-            if (\is_array($validated) and \array_key_exists($index, $validated)) {
-                parent::offsetSet($index, $validated[$index]);
-            } else {
-                parent::offsetUnset($index);
-            }
+            parent::offsetSet($index, $validated);
         }
     }
 }

@@ -23,7 +23,7 @@ class ValidArrayTest extends TestCase
      * @param mixed $value
      * @param mixed $expected
      */
-    public function testValidArray($filter, $name, $value, $expected)
+    public function testValidArray(array $filter, string $name, $value, $expected)
     {
         $valid1 = new ValidArray($filter, [$name => $value]);
         $this->assertInstanceOf(ValidArray::class, $valid1);
@@ -47,8 +47,8 @@ class ValidArrayTest extends TestCase
         }
 
         // json_encode
-        $json = \json_encode($valid2);
-        $this->assertEquals(\json_encode([$name => $expected]), $json);
+        $json = json_encode($valid2);
+        $this->assertEquals(json_encode([$name => $expected]), $json);
 
         // ArrayAccess, Countable
         unset($valid2[$name]);
@@ -56,10 +56,10 @@ class ValidArrayTest extends TestCase
     }
 
     /** data provider */
-    public function validArrayProvider()
+    public function validArrayProvider(): array
     {
         $tel_filter = [
-            'filter' => \FILTER_VALIDATE_REGEXP,
+            'filter' => FILTER_VALIDATE_REGEXP,
             'options' => [
                 'default' => '+00 (0)0 00 00 00 00',
                 'regexp' => '/^\+?\d+(?:[. ()-]{1,2}\d+)*$/',
@@ -67,9 +67,9 @@ class ValidArrayTest extends TestCase
         ];
 
         $callback_filter = [
-            'filter' => \FILTER_CALLBACK,
+            'filter' => FILTER_CALLBACK,
             'options' => function ($v) {
-                if (is_string($v) and $v[0] == '_') {
+                if (is_string($v) and ($v[0] ?? '') == '_') {
                     return $v;
                 } else {
                     return false;
@@ -78,29 +78,29 @@ class ValidArrayTest extends TestCase
         ];
 
         $php_net_example_filters = [
-            'product_id' => \FILTER_SANITIZE_ENCODED,
-            'component' => ['filter' => \FILTER_VALIDATE_INT,
-                'flags' => \FILTER_FORCE_ARRAY,
+            'product_id' => FILTER_SANITIZE_ENCODED,
+            'component' => ['filter' => FILTER_VALIDATE_INT,
+                'flags' => FILTER_FORCE_ARRAY,
                 'options' => ['min_range' => 1, 'max_range' => 10],
             ],
-            'versions' => \FILTER_SANITIZE_ENCODED,
-            'doesnotexist' => \FILTER_VALIDATE_INT,
-            'testintscalar' => ['filter' => \FILTER_VALIDATE_INT, 'flags' => \FILTER_REQUIRE_SCALAR],
-            'testintarray' => ['filter' => \FILTER_VALIDATE_INT, 'flags' => \FILTER_FORCE_ARRAY],
+            'versions' => FILTER_SANITIZE_ENCODED,
+            'doesnotexist' => FILTER_VALIDATE_INT,
+            'testintscalar' => ['filter' => FILTER_VALIDATE_INT, 'flags' => FILTER_REQUIRE_SCALAR],
+            'testintarray' => ['filter' => FILTER_VALIDATE_INT, 'flags' => FILTER_FORCE_ARRAY],
         ];
 
         return [
-            [['name' => \FILTER_SANITIZE_STRING], 'name', 'value', 'value'],
-            [['id' => \FILTER_SANITIZE_NUMBER_INT], 'id', 123, '123'],
-            [['id' => \FILTER_SANITIZE_NUMBER_INT], 'id', 'string', ''],
-            [['url' => \FILTER_VALIDATE_URL], 'url', 'http://a.b.c/d/e.f', 'http://a.b.c/d/e.f'],
-            [['url' => \FILTER_VALIDATE_URL], 'url', 'a.b.c/d/e.f', false],
-            [['ip' => ['filter'=>\FILTER_VALIDATE_IP, 'flags'=>\FILTER_FLAG_IPV4]], 'ip', '1.2.3.4', '1.2.3.4'],
-            [['ip' => ['filter'=>\FILTER_VALIDATE_IP, 'flags'=>\FILTER_FLAG_IPV6]], 'ip', '1.2.3.4', false],
-            [['email' => ['filter'=>\FILTER_VALIDATE_EMAIL, 'flags'=>\FILTER_FORCE_ARRAY]], 'email', 'a@b.c', ['a@b.c']],
-            [['email' => ['filter'=>\FILTER_VALIDATE_EMAIL, 'flags'=>\FILTER_FORCE_ARRAY]], 'email', ['a@b.c'], ['a@b.c']],
-            [['names' => ['filter'=>\FILTER_SANITIZE_STRING, 'flags'=>\FILTER_REQUIRE_ARRAY]], 'names', 'value', false],
-            [['names' => ['filter'=>\FILTER_SANITIZE_STRING, 'flags'=>\FILTER_REQUIRE_ARRAY]], 'names', ['value1', 'value2'], ['value1', 'value2']],
+            [['name' => FILTER_SANITIZE_STRING], 'name', 'value', 'value'],
+            [['id' => FILTER_SANITIZE_NUMBER_INT], 'id', 123, '123'],
+            [['id' => FILTER_SANITIZE_NUMBER_INT], 'id', 'string', ''],
+            [['url' => FILTER_VALIDATE_URL], 'url', 'http://a.b.c/d/e.f', 'http://a.b.c/d/e.f'],
+            [['url' => FILTER_VALIDATE_URL], 'url', 'a.b.c/d/e.f', false],
+            [['ip' => ['filter'=>FILTER_VALIDATE_IP, 'flags'=>FILTER_FLAG_IPV4]], 'ip', '1.2.3.4', '1.2.3.4'],
+            [['ip' => ['filter'=>FILTER_VALIDATE_IP, 'flags'=>FILTER_FLAG_IPV6]], 'ip', '1.2.3.4', false],
+            [['email' => ['filter'=>FILTER_VALIDATE_EMAIL, 'flags'=>FILTER_FORCE_ARRAY]], 'email', 'a@b.c', ['a@b.c']],
+            [['email' => ['filter'=>FILTER_VALIDATE_EMAIL, 'flags'=>FILTER_FORCE_ARRAY]], 'email', ['a@b.c'], ['a@b.c']],
+            [['names' => ['filter'=>FILTER_SANITIZE_STRING, 'flags'=>FILTER_REQUIRE_ARRAY]], 'names', 'value', false],
+            [['names' => ['filter'=>FILTER_SANITIZE_STRING, 'flags'=>FILTER_REQUIRE_ARRAY]], 'names', ['value1', 'value2'], ['value1', 'value2']],
             [['tel' => $tel_filter], 'tel', '123-02-03', '123-02-03'],
             [['tel' => $tel_filter], 'tel', 'unknown', '+00 (0)0 00 00 00 00'],
             [['val' => $callback_filter], 'val', '_true_', '_true_'],
@@ -118,17 +118,17 @@ class ValidArrayTest extends TestCase
     public function testValidArrayAddEmpty()
     {
         // by default, unset variables in input will be added to final array
-        $valid1 = new ValidArray(['name' => \FILTER_DEFAULT, 'unset' => \FILTER_DEFAULT], ['name' => 'value']);
+        $valid1 = new ValidArray(['name' => FILTER_DEFAULT, 'unset' => FILTER_DEFAULT], ['name' => 'value']);
         $this->assertCount(2, $valid1);
         $this->assertEquals('value', $valid1['name']);
-        $this->assertTrue(\array_key_exists('unset', $valid1));
+        $this->assertArrayHasKey('unset', $valid1);
         $this->assertNull($valid1['unset']);
 
         // to exclude unset input variables from final array set $add_empty parameter to false
-        $valid2 = new ValidArray(['name' => \FILTER_DEFAULT, 'unset' => \FILTER_DEFAULT], ['name' => 'value'], false);
+        $valid2 = new ValidArray(['name' => FILTER_DEFAULT, 'unset' => FILTER_DEFAULT], ['name' => 'value'], false);
         $this->assertCount(1, $valid2);
         $this->assertEquals('value', $valid1['name']);
-        $this->assertFalse(\array_key_exists('unset', $valid2));
+        $this->assertArrayNotHasKey('unset', $valid2);
     }
 
     public function testValidArrayDefault()
@@ -136,8 +136,8 @@ class ValidArrayTest extends TestCase
         // default values will be used for unset vars
         $valid1 = new ValidArray(
             [
-                'name' => ['filter' => \FILTER_VALIDATE_INT, 'flags' => \FILTER_FORCE_ARRAY, 'options' => ['default' => 42]],
-                'empty' => ['filter' => \FILTER_VALIDATE_INT, 'options' => ['default' => 42]],
+                'name' => ['filter' => FILTER_VALIDATE_INT, 'flags' => FILTER_FORCE_ARRAY, 'options' => ['default' => 42]],
+                'empty' => ['filter' => FILTER_VALIDATE_INT, 'options' => ['default' => 42]],
             ],
             [
                 'name' => [null, 'string', 0],
@@ -150,8 +150,8 @@ class ValidArrayTest extends TestCase
         // if $add_empty param is false, default values for unset vars will not be used
         $valid2 = new ValidArray(
             [
-                'name' => ['filter' => \FILTER_VALIDATE_INT, 'options' => ['default' => 42]],
-                'empty' => ['filter' => \FILTER_VALIDATE_INT, 'options' => ['default' => 42]],
+                'name' => ['filter' => FILTER_VALIDATE_INT, 'options' => ['default' => 42]],
+                'empty' => ['filter' => FILTER_VALIDATE_INT, 'options' => ['default' => 42]],
             ],
             [
                 'name' => null,

@@ -10,15 +10,15 @@ interface MutableFiltersInterface
      *
      * @param array $filters
      * @param bool $add_empty
-     * @return \Vertilia\ValidArray\ValidArray
+     * @return ValidArray
      */
-    public function setFilters(array $filters, bool $add_empty = true);
+    public function setFilters(array $filters, bool $add_empty = true): ValidArray;
 
     /**
      * Adds / replaces filters to ValidArray, revalidates data for replaced filters
      *
      * @param array $filters
-     * @return \Vertilia\ValidArray\ValidArray
+     * @return ValidArray
      */
-    public function addFilters(array $filters);
+    public function addFilters(array $filters): ValidArray;
 }

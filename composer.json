@@ -12,12 +12,17 @@
     }
   },
   "config": {
-    "optimize-autoloader": true
+    "optimize-autoloader": true,
+    "platform": {
+      "php": "7.4.0"
+    }
   },
   "require": {
-    "php": "^7.1"
+    "php": "^7.4",
+    "ext-filter": "*"
   },
-  "suggest": {
-    "phpunit/phpunit": "To run tests"
+  "require-dev": {
+    "ext-json": "*",
+    "phpunit/phpunit": "^9.5"
   }
 }

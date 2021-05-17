@@ -33,10 +33,10 @@ class MutableValidArray extends ValidArray implements MutableFiltersInterface
      */
     public function addFilters(array $filters): MutableValidArray
     {
-        $this->filters = \array_replace($this->filters, $filters);
+        $this->filters = array_replace($this->filters, $filters);
 
         foreach ($filters as $k => $v) {
-            if (\array_key_exists($k, $this)) {
+            if (array_key_exists($k, $this)) {
                 // revalidate existing value;
                 $this[$k] = $this[$k];
             }

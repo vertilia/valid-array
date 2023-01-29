@@ -11,18 +11,12 @@
       "Vertilia\\ValidArray\\": "src/"
     }
   },
-  "config": {
-    "optimize-autoloader": true,
-    "platform": {
-      "php": "7.4.0"
-    }
-  },
   "require": {
-    "php": "^7.4",
+    "php": ">=7.4",
     "ext-filter": "*"
   },
   "require-dev": {
     "ext-json": "*",
-    "phpunit/phpunit": "^9.5"
+    "phpunit/phpunit": "*"
   }
 }

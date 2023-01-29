@@ -15,7 +15,7 @@ class MutableValidArrayTest extends TestCase
     public function testSetFilter()
     {
         $valid = new MutableValidArray(
-            ['name' => FILTER_SANITIZE_STRING],
+            ['name' => FILTER_DEFAULT],
             ['name' => 'value']
         );
         $this->assertInstanceOf(ValidArray::class, $valid);
@@ -44,7 +44,7 @@ class MutableValidArrayTest extends TestCase
     public function testAddFilter()
     {
         $valid = new MutableValidArray(
-            ['name' => FILTER_SANITIZE_STRING],
+            ['name' => FILTER_DEFAULT],
             ['name' => 'value']
         );
         $this->assertCount(1, $valid);

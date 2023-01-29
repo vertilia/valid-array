@@ -61,7 +61,7 @@ class ValidArray extends \ArrayObject
      * @param string $key
      * @param mixed $value
      */
-    public function offsetSet($key, $value)
+    public function offsetSet($key, $value): void
     {
         // if filter for $index is defined, filter the argument
         if (isset($this->filters[$key])) {

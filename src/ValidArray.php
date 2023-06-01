@@ -1,7 +1,10 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Vertilia\ValidArray;
+
+use ArrayObject;
 
 /**
  * Array object with predefined filters that filter data on insertion. Only keys with defined filters may be set.
@@ -10,7 +13,7 @@ namespace Vertilia\ValidArray;
  *
  * @see https://php.net/filter_var_array
  */
-class ValidArray extends \ArrayObject
+class ValidArray extends ArrayObject
 {
     /** @var array */
     protected array $filters = [];
@@ -44,7 +47,10 @@ class ValidArray extends \ArrayObject
             $validated = filter_var_array($args_raw, $this->filters, $add_empty);
             if (is_array($validated)) {
                 foreach ($validated as $k => &$v) {
-                    if (!isset($v) and isset($this->filters[$k]['options']['default'])) {
+                    if (!isset($v)
+                        and is_array($this->filters[$k]['options'] ?? null)
+                        and isset($this->filters[$k]['options']['default'])
+                    ) {
                         $v = $this->filters[$k]['options']['default'];
                     }
                 }
@@ -53,6 +59,11 @@ class ValidArray extends \ArrayObject
                 parent::__construct($validated);
             }
         }
+    }
+
+    public function getFilters(): array
+    {
+        return $this->filters;
     }
 
     /**

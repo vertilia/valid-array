@@ -1,6 +1,7 @@
 {
   "name": "vertilia/valid-array",
   "description": "Object with automatic items validation based on standard filtering mechanism of php",
+  "keywords": ["validation", "data", "input", "output" ,"filter", "filtering"],
   "license": "BSD-2-Clause",
   "type": "library",
   "autoload": {
@@ -16,7 +17,6 @@
     "ext-filter": "*"
   },
   "require-dev": {
-    "ext-json": "*",
     "phpunit/phpunit": "*"
   }
 }

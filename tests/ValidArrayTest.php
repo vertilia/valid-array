@@ -2,15 +2,18 @@
 
 namespace Vertilia\ValidArray;
 
+use ArrayAccess;
+use Countable;
+use IteratorAggregate;
 use PHPUnit\Framework\TestCase;
 
 /**
- * @coversDefaultClass \Vertilia\ValidArray\ValidArray
+ * @coversDefaultClass ValidArray
  */
 class ValidArrayTest extends TestCase
 {
     /**
-     * @dataProvider validArrayProvider
+     * @dataProvider providerValidArray
      * @covers ::__construct
      * @covers ::offsetSet
      * @covers ::offsetGet
@@ -18,6 +21,7 @@ class ValidArrayTest extends TestCase
      * @covers ::offsetUnset
      * @covers ::count()
      * @covers ::getIterator()
+     * @covers ::getFilters()
      * @param array $filter
      * @param string $name
      * @param mixed $value
@@ -28,17 +32,24 @@ class ValidArrayTest extends TestCase
         $valid1 = new ValidArray($filter, [$name => $value]);
         $this->assertInstanceOf(ValidArray::class, $valid1);
 
-        $this->assertInstanceOf(\ArrayAccess::class, $valid1);
-        $this->assertInstanceOf(\Countable::class, $valid1);
-        $this->assertInstanceOf(\IteratorAggregate::class, $valid1);
+        $this->assertInstanceOf(ArrayAccess::class, $valid1);
+        $this->assertInstanceOf(Countable::class, $valid1);
+        $this->assertInstanceOf(IteratorAggregate::class, $valid1);
+        $this->assertEquals($filter, $valid1->getFilters());
         $this->assertEquals($expected, $valid1[$name]);
 
         // ArrayAccess, Countable
         $valid2 = new ValidArray($filter);
         $valid2[$name] = $value;
-        $this->assertTrue(isset($valid2[$name]));
+        if (array_key_exists($name, $filter)) {
+            $this->assertTrue(isset($valid2[$name]));
+            $this->assertCount(1, $valid2);
+            $this->assertEquals(serialize([$name => $expected]), serialize((array)$valid2));
+        } else {
+            $this->assertFalse(isset($valid2[$name]));
+            $this->assertCount(0, $valid2);
+        }
         $this->assertTrue($expected === $valid2[$name]);
-        $this->assertCount(1, $valid2);
 
         // IteratorAggregate
         foreach ($valid2 as $k => $v) {
@@ -46,17 +57,13 @@ class ValidArrayTest extends TestCase
             $this->assertEquals($v, $expected);
         }
 
-        // json_encode
-        $json = json_encode($valid2);
-        $this->assertEquals(json_encode([$name => $expected]), $json);
-
         // ArrayAccess, Countable
         unset($valid2[$name]);
         $this->assertCount(0, $valid2);
     }
 
     /** data provider */
-    public function validArrayProvider(): array
+    public static function providerValidArray(): array
     {
         $tel_filter = [
             'filter' => FILTER_VALIDATE_REGEXP,
@@ -68,6 +75,7 @@ class ValidArrayTest extends TestCase
 
         $callback_filter = [
             'filter' => FILTER_CALLBACK,
+            'flags' => FILTER_REQUIRE_SCALAR, // ignored with FILTER_CALLBACK!
             'options' => function ($v) {
                 if (is_string($v) and ($v[0] ?? '') == '_') {
                     return $v;
@@ -90,7 +98,7 @@ class ValidArrayTest extends TestCase
         ];
 
         return [
-            [['name' => FILTER_SANITIZE_STRING], 'name', 'value', 'value'],
+            [['name' => FILTER_DEFAULT], 'name', 'value', 'value'],
             [['id' => FILTER_SANITIZE_NUMBER_INT], 'id', 123, '123'],
             [['id' => FILTER_SANITIZE_NUMBER_INT], 'id', 'string', ''],
             [['url' => FILTER_VALIDATE_URL], 'url', 'http://a.b.c/d/e.f', 'http://a.b.c/d/e.f'],
@@ -99,15 +107,26 @@ class ValidArrayTest extends TestCase
             [['ip' => ['filter'=>FILTER_VALIDATE_IP, 'flags'=>FILTER_FLAG_IPV6]], 'ip', '1.2.3.4', false],
             [['email' => ['filter'=>FILTER_VALIDATE_EMAIL, 'flags'=>FILTER_FORCE_ARRAY]], 'email', 'a@b.c', ['a@b.c']],
             [['email' => ['filter'=>FILTER_VALIDATE_EMAIL, 'flags'=>FILTER_FORCE_ARRAY]], 'email', ['a@b.c'], ['a@b.c']],
-            [['names' => ['filter'=>FILTER_SANITIZE_STRING, 'flags'=>FILTER_REQUIRE_ARRAY]], 'names', 'value', false],
-            [['names' => ['filter'=>FILTER_SANITIZE_STRING, 'flags'=>FILTER_REQUIRE_ARRAY]], 'names', ['value1', 'value2'], ['value1', 'value2']],
-            [['tel' => $tel_filter], 'tel', '123-02-03', '123-02-03'],
-            [['tel' => $tel_filter], 'tel', 'unknown', '+00 (0)0 00 00 00 00'],
-            [['val' => $callback_filter], 'val', '_true_', '_true_'],
-            [['val' => $callback_filter], 'val', 'other', false],
-            [['val' => $callback_filter], 'val', ['_true0_', [null, '_true2_', true]], ['_true0_', [false, '_true2_', false]]],
+            [['names' => ['filter'=>FILTER_DEFAULT, 'flags'=>FILTER_REQUIRE_ARRAY]], 'names', 'value', false],
+            [['names' => ['filter'=>FILTER_DEFAULT, 'flags'=>FILTER_REQUIRE_ARRAY]], 'names', ['value1', 'value2'], ['value1', 'value2']],
+
+            'tel with valid' =>
+                [['tel' => $tel_filter], 'tel', '123-02-03', '123-02-03'],
+            'tel with invalid and default' =>
+                [['tel' => $tel_filter], 'tel', 'unknown', '+00 (0)0 00 00 00 00'],
+
+            'callback with valid' =>
+                [['val' => $callback_filter], 'val', '_true_', '_true_'],
+            'callback with invalid' =>
+                [['val' => $callback_filter], 'val', 'other', false],
+            'callback with array' =>
+                [['val' => $callback_filter], 'val', ['_true0_', [null, '_true2_', true]], ['_true0_', [false, '_true2_', false]]],
+            'callback with missing' =>
+                [['val' => $callback_filter], 'x', 'other', null],
+
             [$php_net_example_filters, 'product_id', 'libgd<script>', 'libgd%3Cscript%3E'],
             [$php_net_example_filters, 'component', '10', [10]],
+            [$php_net_example_filters, 'component', ['10', '100'], [10, false]],
             [$php_net_example_filters, 'versions', '2.0.33', '2.0.33'],
             [$php_net_example_filters, 'testintscalar', 2, 2],
             [$php_net_example_filters, 'testintscalar', ['2', '23', '10', '12'], false],

@@ -15,6 +15,8 @@ use ArrayObject;
  */
 class ValidArray extends ArrayObject
 {
+    const FILTER_EXTENDED_CALLBACK = -1;
+
     /** @var array */
     protected array $filters = [];
 
@@ -42,20 +44,32 @@ class ValidArray extends ArrayObject
         // set filters
         $this->filters = $filters;
 
-        // if raw arguments provided, filter them
-        if (!empty($args_raw)) {
+        // if filters provided, filter the arguments
+        if (!empty($this->filters)) {
             $validated = filter_var_array($args_raw, $this->filters, $add_empty);
             if (is_array($validated)) {
                 foreach ($validated as $k => &$v) {
-                    if (!isset($v)
-                        and is_array($this->filters[$k]['options'] ?? null)
-                        and isset($this->filters[$k]['options']['default'])
+                    $filter = $this->filters[$k];
+
+                    // VA-addition: use default value for missing arguments
+                    if (!array_key_exists($k, $args_raw)
+                        and is_array($filter['options'] ?? null)
+                        and array_key_exists('default', $filter['options'])
                     ) {
-                        $v = $this->filters[$k]['options']['default'];
+                        $v = $filter['options']['default'];
+                    }
+
+                    // VA-addition: FILTER_EXTENDED_CALLBACK
+                    if (self::FILTER_EXTENDED_CALLBACK === ($filter['filter'] ?? FILTER_DEFAULT)
+                        and array_key_exists($k, $args_raw)
+                        and is_array($filter['options'] ?? null)
+                        and isset($filter['options']['callback'])
+                    ) {
+                        $v = filter_var($v, FILTER_CALLBACK, ['options' => $filter['options']['callback']]);
                     }
                 }
 
-                // store validated
+                // store validated data
                 parent::__construct($validated);
             }
         }
@@ -67,7 +81,7 @@ class ValidArray extends ArrayObject
     }
 
     /**
-     * Sets argument by filtering it if corresponding filter is set. Ignores if filter not set.
+     * Set argument by filtering it if corresponding filter is set. Ignore $value if filter for $key is not defined.
      *
      * @param string $key
      * @param mixed $value
@@ -76,12 +90,26 @@ class ValidArray extends ArrayObject
     {
         // if filter for $index is defined, filter the argument
         if (isset($this->filters[$key])) {
-            $validated = filter_var(
-                $value,
-                $this->filters[$key]['filter'] ?? $this->filters[$key],
-                is_array($this->filters[$key]) ? $this->filters[$key] : 0
-            );
-            parent::offsetSet($key, $validated);
+            if (is_array($this->filters[$key])) {
+                $filter = $this->filters[$key]['filter'] ?? FILTER_DEFAULT;
+                $options = $this->filters[$key];
+            } else {
+                $filter = $this->filters[$key];
+                $options = 0;
+            }
+
+            if (self::FILTER_EXTENDED_CALLBACK === $filter
+                and $options
+                and isset($options['options']['callback'])
+            ) {
+                // VA-addition: FILTER_EXTENDED_CALLBACK
+                $pre_valid = filter_var($value, FILTER_DEFAULT, $options);
+                $valid = filter_var($pre_valid, FILTER_CALLBACK, ['options' => $options['options']['callback']]);
+            } else {
+                $valid = filter_var($value, $filter, $options);
+            }
+
+            parent::offsetSet($key, $valid);
         }
     }
 }

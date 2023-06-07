@@ -19,9 +19,9 @@ class ValidArrayTest extends TestCase
      * @covers ::offsetGet
      * @covers ::offsetExists
      * @covers ::offsetUnset
-     * @covers ::count()
-     * @covers ::getIterator()
-     * @covers ::getFilters()
+     * @covers ::count
+     * @covers ::getIterator
+     * @covers ::getFilters
      * @param array $filter
      * @param string $name
      * @param mixed $value
@@ -38,7 +38,7 @@ class ValidArrayTest extends TestCase
         $this->assertInstanceOf(Countable::class, $valid1);
         $this->assertInstanceOf(IteratorAggregate::class, $valid1);
         $this->assertEquals($filter, $valid1->getFilters());
-        $this->assertEquals($expected, $valid1[$name]);
+        $this->assertEquals($expected, $valid1[$name] ?? null);
 
         $valid2 = new ValidArray($filter);
         // ArrayAccess
@@ -66,12 +66,12 @@ class ValidArrayTest extends TestCase
                 $this->assertNull($v);
             }
         }
-        $this->assertTrue($expected === $valid2[$name]);
+        $this->assertTrue($expected === ($valid2[$name] ?? null));
 
         // ArrayAccess
         unset($valid2[$first_key]);
         // Countable
-        $this->assertCount(count($filter) - 1, $valid2);
+        $this->assertCount(count($filter), $valid2);
     }
 
     /** data provider */
@@ -145,26 +145,25 @@ class ValidArrayTest extends TestCase
         ];
     }
 
-    public function testValidArrayAddEmpty()
+    /**
+     * @covers ::count
+     * @covers ::offsetGet
+     */
+    public function testValidArrayCount()
     {
-        // by default, unset variables in input will be added to final array
-        $valid1 = new ValidArray(['name' => FILTER_DEFAULT, 'unset' => FILTER_DEFAULT], ['name' => 'value']);
-        $this->assertCount(2, $valid1);
-        $this->assertEquals('value', $valid1['name']);
-        $this->assertArrayHasKey('unset', $valid1);
-        $this->assertNull($valid1['unset']);
-
-        // to exclude unset input variables from final array set $add_empty parameter to false
-        $valid2 = new ValidArray(['name' => FILTER_DEFAULT, 'unset' => FILTER_DEFAULT], ['name' => 'value'], false);
-        $this->assertCount(1, $valid2);
-        $this->assertEquals('value', $valid1['name']);
-        $this->assertArrayNotHasKey('unset', $valid2);
+        $valid = new ValidArray(['name' => FILTER_DEFAULT, 'unset' => FILTER_DEFAULT], ['name' => 'value']);
+        $this->assertCount(2, $valid);
+        $this->assertEquals('value', $valid['name']);
+        $this->assertArrayHasKey('unset', $valid);
+        $this->assertNull($valid['unset']);
+        $valid[] = 'test';
+        $this->assertCount(2, $valid);
     }
 
     public function testValidArrayDefault()
     {
         // default values will be used for unset vars
-        $valid1 = new ValidArray(
+        $valid = new ValidArray(
             [
                 'name1' => ['filter' => FILTER_VALIDATE_INT, 'flags' => FILTER_FORCE_ARRAY, 'options' => ['default' => 42]],
                 'name2' => ['filter' => FILTER_VALIDATE_INT, 'flags' => FILTER_FORCE_ARRAY, 'options' => ['default' => 42]],
@@ -176,28 +175,12 @@ class ValidArrayTest extends TestCase
                 'name2' => '0',
             ]
         );
-        $this->assertCount(4, $valid1, 'set all filters');
-        $this->assertEquals([42, 42, 0], $valid1['name1'], 'existing param: is array');
-        $this->assertEquals([0], $valid1['name2'], 'existing param: from scalar to array, use flags');
-        $this->assertEquals(42, $valid1['empty1'], 'missing param: use default, ignore flags (VA-addition)');
-        $this->assertEquals(null, $valid1['empty2'], 'missing param: default null, ignore flags');
-        $this->assertEquals(null, $valid1['missing'], 'undeclared param: set null');
-
-        // if $add_empty param is false, default values for unset vars will not be used
-        $valid2 = new ValidArray(
-            [
-                'name' => ['filter' => FILTER_VALIDATE_INT, 'options' => ['default' => 42]],
-                'empty' => ['filter' => FILTER_VALIDATE_INT, 'options' => ['default' => 42]],
-            ],
-            [
-                'name' => null,
-            ],
-            false
-        );
-        $this->assertCount(1, $valid2);
-        $this->assertEquals(42, $valid2['name']);
-        $this->assertEquals(null, $valid2['empty']);
-        $this->assertEquals(null, $valid1['missing']);
+        $this->assertCount(4, $valid, 'set all filters');
+        $this->assertEquals([42, 42, 0], $valid['name1'], 'existing param: is array');
+        $this->assertEquals([0], $valid['name2'], 'existing param: from scalar to array, use flags');
+        $this->assertEquals(42, $valid['empty1'], 'missing param: use default, ignore flags (VA-addition)');
+        $this->assertEquals(null, $valid['empty2'], 'missing param: default null, ignore flags');
+        $this->assertEquals(null, $valid['missing'] ?? null, 'undeclared param: set null');
     }
 
     public function testValidArrayCallback()
@@ -205,7 +188,7 @@ class ValidArrayTest extends TestCase
         $filter = [
             'cb' => [
                 'filter' => FILTER_CALLBACK,
-                'flags' => FILTER_FORCE_ARRAY,
+                'flags' => FILTER_FORCE_ARRAY, // ignored
                 'options' => fn($v) => 42,
             ]
         ];
@@ -214,18 +197,17 @@ class ValidArrayTest extends TestCase
         $this->assertCount(1, $valid1);
         $this->assertEquals(42, $valid1['cb'], 'existing param: run callback, ignore flags');
         unset($valid1['cb']);
-        $this->assertCount(0, $valid1);
+        $this->assertCount(1, $valid1);
+        $this->assertNull($valid1['cb'], 'unset param: null');
+        $valid1['X'] = 12;
+        $this->assertCount(1, $valid1);
+        $this->assertNull($valid1['X'] ?? null, 'ignore undefined param');
         $valid1['cb'] = 12;
         $this->assertCount(1, $valid1);
         $this->assertEquals(42, $valid1['cb'], 'set existing param: run callback, ignore flags');
 
         $valid2 = new ValidArray($filter, ['X' => 1, 'Y' => 1]);
-        $this->assertCount(1, $valid2);
         $this->assertEquals(null, $valid2['cb'], 'undeclared param: set null, ignore callback, ignore flags');
-
-        $valid3 = new ValidArray($filter, ['X' => 1, 'Y' => 1], false);
-        $this->assertCount(0, $valid3);
-        $this->assertEquals(null, $valid3['cb'], 'undeclared param: return null');
     }
 
     public function testValidArrayExtendedCallback()
@@ -242,7 +224,8 @@ class ValidArrayTest extends TestCase
         $this->assertCount(1, $valid1);
         $this->assertEquals([42, [42, 42], 42], $valid1['cb'], 'existing param: run callback, use flags (VA-addition)');
         unset($valid1['cb']);
-        $this->assertCount(0, $valid1);
+        $this->assertCount(1, $valid1);
+        $this->assertEquals(35, $valid1['cb'], 'unset param: use default, ignore flags (VA-addition)');
         $valid1['cb'] = 12;
         $this->assertCount(1, $valid1);
         $this->assertEquals([42], $valid1['cb'], 'set existing param: run callback, use flags (VA-addition)');
@@ -250,9 +233,5 @@ class ValidArrayTest extends TestCase
         $valid2 = new ValidArray($filter, ['X' => 1, 'Y' => 1]);
         $this->assertCount(1, $valid2);
         $this->assertEquals(35, $valid2['cb'], 'undeclared param: use default, ignore flags (VA-addition)');
-
-        $valid3 = new ValidArray($filter, ['X' => 1, 'Y' => 1], false);
-        $this->assertCount(0, $valid3);
-        $this->assertEquals(null, $valid3['cb'], 'undeclared param: return null');
     }
 }

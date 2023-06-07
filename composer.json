@@ -17,6 +17,6 @@
     "ext-filter": "*"
   },
   "require-dev": {
-    "phpunit/phpunit": "*"
+    "phpunit/phpunit": "^9"
   }
 }

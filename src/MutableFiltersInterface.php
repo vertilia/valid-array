@@ -6,16 +6,15 @@ namespace Vertilia\ValidArray;
 interface MutableFiltersInterface
 {
     /**
-     * Resets ValidArray filters and revalidates data
+     * Reset ValidArray filters and revalidate data
      *
      * @param array $filters
-     * @param bool $add_empty
      * @return ValidArray
      */
-    public function setFilters(array $filters, bool $add_empty = true): ValidArray;
+    public function setFilters(array $filters): ValidArray;
 
     /**
-     * Adds / replaces filters to ValidArray, revalidates data for replaced filters
+     * Add / replace filters to ValidArray, revalidate data for replaced filters, set defaults for new elements
      *
      * @param array $filters
      * @return ValidArray

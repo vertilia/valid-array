@@ -12,35 +12,42 @@ namespace Vertilia\ValidArray;
 class MutableValidArray extends ValidArray implements MutableFiltersInterface
 {
     /**
-     * Sets new filters for data. Revalidates current values. Current values not present in $filters will be unset.
+     * Reset data filters. Revalidate current values. Current values not present in $filters will be removed.
      *
      * @param array $filters filtering structure as defined for filter_var_array() php function
-     * @param bool $add_empty whether to add missing values as NULL
      * @return MutableValidArray $this
      * @see https://php.net/filter_var_array
      */
-    public function setFilters(array $filters, bool $add_empty = true): MutableValidArray
+    public function setFilters(array $filters): MutableValidArray
     {
-        parent::__construct($filters, (array)$this, $add_empty);
+        foreach (array_diff_key($this->filters, $filters) as $k => $_) {
+            unset($this->filters[$k], $this->missing[$k], $this[$k]);
+        }
+        $this->addFilters($filters);
 
         return $this;
     }
 
     /**
-     * Adds / replaces filters with new values. Revalidates current values (for new filters only).
+     * Add / replace filters. Revalidate current data values for updated filters. Set default values for new values.
      *
      * @param array $filters filters descriptions to add to existing structure
      * @return MutableValidArray $this
+     * @see https://php.net/filter_var_array
      */
     public function addFilters(array $filters): MutableValidArray
     {
-        $this->filters = array_replace($this->filters, $filters);
-
-        foreach ($filters as $k => $v) {
-            if (array_key_exists($k, (array)$this)) {
-                // revalidate existing value;
-                $this[$k] = $this[$k];
+        foreach ($filters as $k => $f) {
+            if (!array_key_exists($k, $this->filters)) {
+                $this->missing[$k] = true;
             }
+            $this->filters[$k] = $f;
+            $this->offsetSet(
+                $k,
+                empty($this->missing[$k])
+                    ? $this[$k]
+                    : $this->getDefault($k)
+            );
         }
 
         return $this;

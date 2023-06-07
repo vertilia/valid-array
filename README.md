@@ -231,8 +231,10 @@ Notable distinctions between `ValidArray` and `filter_*()` functions:
 
 - `ValidArray` is an object but allows array-style access to elements since extending `ArrayObject` SPL class;
 - it allows using `default` values for missing parameters for all filters;
-- it provides `ValidArray::FILTER_EXTENDED_CALLBACK` filter allows to define callbacks that unlock both `flags`
-  and `default` functionality.
+- it provides `ValidArray::FILTER_EXTENDED_CALLBACK` filter allowing to define callbacks that unlock both `flags`
+  and `default` functionality;
+- `ValidArray` always uses `$add_empty` mode of `filter_var_array()` function and does not allow to unset elements
+  that have filters defined. Updating filters is allowed when using `MutableValidArray` class.
 
 ## More use cases
 
@@ -288,10 +290,12 @@ Since `ValidArray` extends `ArrayObject`, its elements may be accessed (added, i
 
 ```php
 $va['name'] = 'John Snow';
-echo $va['name']; // prints: John Snow
+echo "{$va['name']}\n";
+// prints: John Snow
 
 foreach ($va as $name => $value) {
     printf("'%s' => %s,\n", $name, var_export($value, true));
+    // prints: 'name' => 'John Snow',
 }
 ```
 

@@ -21,7 +21,7 @@ class MutableValidArray extends ValidArray implements MutableFiltersInterface
     public function setFilters(array $filters): MutableValidArray
     {
         foreach (array_diff_key($this->filters, $filters) as $k => $_) {
-            unset($this->filters[$k], $this->missing[$k], $this[$k]);
+            unset($this->filters[$k], $this[$k]);
         }
         $this->addFilters($filters);
 
@@ -39,15 +39,12 @@ class MutableValidArray extends ValidArray implements MutableFiltersInterface
     {
         foreach ($filters as $k => $f) {
             if (!array_key_exists($k, $this->filters)) {
-                $this->missing[$k] = true;
+                $this->filters[$k] = $f;
+                unset($this[$k]);
+            } else {
+                $this->filters[$k] = $f;
+                $this->offsetSet($k, $this[$k]);
             }
-            $this->filters[$k] = $f;
-            $this->offsetSet(
-                $k,
-                empty($this->missing[$k])
-                    ? $this[$k]
-                    : $this->getDefault($k)
-            );
         }
 
         return $this;

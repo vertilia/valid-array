@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Vertilia\ValidArray;
 
 use ArrayObject;
+use TypeError;
 
 /**
  * Array object with predefined filters that filter data on insertion. Only keys with defined filters may be set.
@@ -16,9 +17,9 @@ use ArrayObject;
 class ValidArray extends ArrayObject
 {
     const FILTER_EXTENDED_CALLBACK = -1;
+    const FILTER_INSTANCE_OF = -2;
 
     protected array $filters = [];
-    protected array $missing = [];
 
     /**
      * @param array $filters filtering structure as defined for filter_var_array() php function, ex: {
@@ -42,28 +43,28 @@ class ValidArray extends ArrayObject
     {
         // set filters
         $this->filters = $filters;
-        $this->missing = [];
 
         // if filters provided, filter the arguments
         if (!empty($this->filters)) {
             $validated = filter_var_array($args_raw, $this->filters) ?: [];
 
-            foreach ($validated as $k => &$v) {
-                $filter = $this->filters[$k];
+            foreach ($validated as $key => &$valid) {
+                $filter = $this->filters[$key];
 
-                // VA-addition: use default value for missing arguments
-                if (!array_key_exists($k, $args_raw)) {
-                    $this->missing[$k] = true;
-                    $v = $this->getDefault($k);
+                if (!array_key_exists($key, $args_raw)) {
+                    // VA-addition: use default value for missing arguments
+                    $valid = $this->getDefault($key);
+                    continue;
                 }
 
-                // VA-addition: FILTER_EXTENDED_CALLBACK
-                if (self::FILTER_EXTENDED_CALLBACK === ($filter['filter'] ?? FILTER_DEFAULT)
-                    and array_key_exists($k, $args_raw)
-                    and is_array($filter['options'] ?? null)
-                    and isset($filter['options']['callback'])
-                ) {
-                    $v = filter_var($v, FILTER_CALLBACK, ['options' => $filter['options']['callback']]);
+                switch ($filter['filter'] ?? $filter) {
+                    case self::FILTER_EXTENDED_CALLBACK:
+                        $valid = $this->filterExtendedCallback($key, $args_raw[$key], (array)$filter, $valid);
+                        break;
+
+                    case self::FILTER_INSTANCE_OF:
+                        $valid = $this->filterInstanceOf($key, $args_raw[$key], (array)$filter, $valid);
+                        break;
                 }
             }
 
@@ -73,21 +74,106 @@ class ValidArray extends ArrayObject
         }
     }
 
+    /**
+     * @param string $key
+     * @param mixed $value
+     * @param array $options
+     * @param mixed $pre_valid
+     * @return mixed
+     * @throws TypeError
+     */
+    protected function filterExtendedCallback(string $key, $value, array $options, $pre_valid)
+    {
+        // parameters mismatch
+        if (!is_array($options['options']) or !isset($options['options']['callback'])) {
+            throw new TypeError('"callback" option must be set for FILTER_EXTENDED_CALLBACK filter');
+        }
+
+        // flags mismatch
+        if (false === $pre_valid or null === $pre_valid) {
+            return $pre_valid;
+        }
+
+        $valid = (is_array($pre_valid) && !is_array($value)) ? [$value] : $value;
+
+        $callback = $options['options']['callback'];
+        if (is_array($valid)) {
+            $default = $this->getDefault($key, false);
+            array_walk_recursive($valid, function (&$valid_element) use ($callback, $default) {
+                $cb = $callback($valid_element);
+                $valid_element = false === $cb ? $default : $cb;
+            });
+        } else {
+            $cb = ($callback)($valid);
+            $valid = false === $cb ? $this->getDefault($key, false) : $cb;
+        }
+
+        return $valid;
+    }
+
+    /**
+     * @param string $key
+     * @param mixed $value
+     * @param array $options
+     * @param mixed $pre_valid
+     * @return mixed
+     * @throws TypeError
+     */
+    protected function filterInstanceOf(string $key, $value, array $options, $pre_valid)
+    {
+        // parameters mismatch
+        if (!isset($options['options']['class_name'])) {
+            throw new TypeError('"class_name" option must be set for FILTER_CLASS filter');
+        }
+
+        // flags mismatch
+        if (false === $pre_valid or null === $pre_valid) {
+            return $pre_valid;
+        }
+
+        $valid = (is_array($pre_valid) && !is_array($value)) ? [$value] : $value;
+
+        $class_name = $options['options']['class_name'];
+        if (is_array($valid)) {
+            $default = $this->getDefault($key, false);
+            array_walk_recursive($valid, function (&$valid_element) use ($class_name, $default) {
+                if (!is_object($valid_element) or !is_a($valid_element, $class_name)) {
+                    $valid_element = $default;
+                }
+            });
+        } elseif (!is_object($valid) or !is_a($valid, $class_name)) {
+            $valid = $this->getDefault($key, false);
+        }
+
+        return $valid;
+    }
+
     public function getFilters(): array
     {
         return $this->filters;
     }
 
-    public function getDefault(string $key)
+    /**
+     * Default value in order of preference:
+     * - defined as $filter['options']['default'] value, or
+     * - null if missing value or error context with FILTER_NULL_ON_FAILURE flag, or
+     * - false if error context
+     *
+     * @param string $key element key name
+     * @param bool $as_missing called for missing value or in error context
+     * @return false|mixed|null
+     */
+    public function getDefault(string $key, bool $as_missing = true)
     {
-        if (is_array($this->filters[$key] ?? null)
-            and is_array($this->filters[$key]['options'] ?? null)
-            and array_key_exists('default', $this->filters[$key]['options'])
-        ) {
-            return $this->filters[$key]['options']['default'];
+        $filter = $this->filters[$key] ?? null;
+        $options = $filter['options'] ?? null;
+        if (is_array($options) and array_key_exists('default', $options)) {
+            return $filter['options']['default'];
+        } elseif ($as_missing || (($filter['flags'] ?? FILTER_FLAG_NONE) & FILTER_NULL_ON_FAILURE)) {
+            return null;
+        } else {
+            return false;
         }
-
-        return null;
     }
 
     /**
@@ -99,45 +185,39 @@ class ValidArray extends ArrayObject
      */
     public function offsetSet($key, $value): void
     {
-        // treat null value as missing without default
-        if (null === $value) {
-            parent::offsetSet($key, null);
-            $this->missing[$key] = true;
+        // exit if filter for $index is not defined
+        if (!isset($this->filters[$key])) {
             return;
         }
 
-        // if filter for $index is defined, filter the argument
-        if (isset($this->filters[$key])) {
-            if (is_array($this->filters[$key])) {
-                $filter = $this->filters[$key]['filter'] ?? FILTER_DEFAULT;
-                $options = $this->filters[$key];
-            } else {
-                $filter = $this->filters[$key];
-                $options = 0;
-            }
-
-            if (self::FILTER_EXTENDED_CALLBACK === $filter
-                and $options
-                and is_array($options['options'] ?? null)
-                and isset($options['options']['callback'])
-            ) {
-                // VA-addition: FILTER_EXTENDED_CALLBACK
-                $pre_valid = filter_var($value, FILTER_DEFAULT, $options);
-                $valid = filter_var($pre_valid, FILTER_CALLBACK, ['options' => $options['options']['callback']]);
-            } else {
-                $valid = filter_var($value, $filter, $options);
-            }
-
-            parent::offsetSet($key, $valid);
+        // prepare local variables
+        if (is_array($this->filters[$key])) {
+            $filter = $this->filters[$key]['filter'] ?? FILTER_DEFAULT;
+            $options = $this->filters[$key];
+        } else {
+            $filter = $this->filters[$key];
+            $options = 0;
         }
 
-        unset($this->missing[$key]);
+        $valid = filter_var($value, $filter < 0 ? FILTER_DEFAULT : $filter, $options);
+
+        // filter the argument
+        switch ($filter) {
+            case self::FILTER_EXTENDED_CALLBACK:
+                $valid = $this->filterExtendedCallback($key, $value, (array)$options, $valid);
+                break;
+
+            case self::FILTER_INSTANCE_OF:
+                $valid = $this->filterInstanceOf($key, $value, (array)$options, $valid);
+                break;
+        }
+
+        parent::offsetSet($key, $valid);
     }
 
     public function offsetUnset($key): void
     {
         if (array_key_exists($key, $this->filters)) {
-            $this->missing[$key] = true;
             parent::offsetSet($key, $this->getDefault($key));
         } else {
             parent::offsetUnset($key);

@@ -3,9 +3,15 @@
 namespace Vertilia\ValidArray;
 
 use ArrayAccess;
+use ArrayObject;
 use Countable;
 use IteratorAggregate;
 use PHPUnit\Framework\TestCase;
+use RangeException;
+use RuntimeException;
+use SplDoublyLinkedList;
+use SplStack;
+use stdClass;
 
 /**
  * @coversDefaultClass ValidArray
@@ -14,14 +20,14 @@ class ValidArrayTest extends TestCase
 {
     /**
      * @dataProvider providerValidArray
-     * @covers ::__construct
-     * @covers ::offsetSet
-     * @covers ::offsetGet
-     * @covers ::offsetExists
-     * @covers ::offsetUnset
-     * @covers ::count
-     * @covers ::getIterator
-     * @covers ::getFilters
+     * @covers ValidArray::__construct
+     * @covers ValidArray::offsetSet
+     * @covers ValidArray::offsetGet
+     * @covers ValidArray::offsetExists
+     * @covers ValidArray::offsetUnset
+     * @covers ValidArray::count
+     * @covers ValidArray::getIterator
+     * @covers ValidArray::getFilters
      * @param array $filter
      * @param string $name
      * @param mixed $value
@@ -37,8 +43,8 @@ class ValidArrayTest extends TestCase
         $this->assertInstanceOf(ArrayAccess::class, $valid1);
         $this->assertInstanceOf(Countable::class, $valid1);
         $this->assertInstanceOf(IteratorAggregate::class, $valid1);
-        $this->assertEquals($filter, $valid1->getFilters());
-        $this->assertEquals($expected, $valid1[$name] ?? null);
+        $this->assertSame($filter, $valid1->getFilters());
+        $this->assertSame($expected, $valid1[$name] ?? null);
 
         $valid2 = new ValidArray($filter);
         // ArrayAccess
@@ -48,25 +54,24 @@ class ValidArrayTest extends TestCase
         if (array_key_exists($name, $filter)) {
             // ArrayAccess
             $this->assertTrue(isset($valid2[$name]));
-            $this->assertEquals(serialize([$name => $expected]), serialize(array_intersect_key((array)$valid2, [$name => null])));
+            $this->assertSame($expected, $valid2[$name]);
             // IteratorAggregate
             foreach ($valid2 as $k => $v) {
                 if ($k === $name) {
-                    $this->assertEquals($expected, $v);
+                    $this->assertSame($expected, $v, "element: $k");
                 } else {
-                    $this->assertNull($v);
+                    $this->assertNull($v, "element missing: $k");
                 }
             }
         } else {
             // ArrayAccess
             $this->assertFalse(isset($valid2[$name]));
-            $this->assertEquals(serialize([$first_key => null]), serialize(array_intersect_key((array)$valid2, [$first_key => null])));
             // IteratorAggregate
             foreach ($valid2 as $v) {
-                $this->assertNull($v);
+                $this->assertNull($v, "element missing: " . var_export($v, true));
             }
         }
-        $this->assertTrue($expected === ($valid2[$name] ?? null));
+        $this->assertSame($expected, $valid2[$name] ?? null);
 
         // ArrayAccess
         unset($valid2[$first_key]);
@@ -146,21 +151,27 @@ class ValidArrayTest extends TestCase
     }
 
     /**
-     * @covers ::count
-     * @covers ::offsetGet
+     * @covers ValidArray::count
+     * @covers ValidArray::offsetGet
      */
-    public function testValidArrayCount()
+    public function testCount()
     {
-        $valid = new ValidArray(['name' => FILTER_DEFAULT, 'unset' => FILTER_DEFAULT], ['name' => 'value']);
+        $valid = new ValidArray(
+            ['name' => ['filter' => FILTER_DEFAULT, 'options' => ['default' => 'DEFAULT']], 'unset' => FILTER_DEFAULT],
+            ['name' => 'value']
+        );
         $this->assertCount(2, $valid);
-        $this->assertEquals('value', $valid['name']);
+        $this->assertSame('value', $valid['name']);
         $this->assertArrayHasKey('unset', $valid);
         $this->assertNull($valid['unset']);
         $valid[] = 'test';
         $this->assertCount(2, $valid);
+        unset($valid['name']);
+        $this->assertCount(2, $valid);
+        $this->assertSame('DEFAULT', $valid['name']);
     }
 
-    public function testValidArrayDefault()
+    public function testOptionsDefault()
     {
         // default values will be used for unset vars
         $valid = new ValidArray(
@@ -173,65 +184,189 @@ class ValidArrayTest extends TestCase
             [
                 'name1' => [null, 'non-numeric string', '0'],
                 'name2' => '0',
-            ]
+            ],
         );
         $this->assertCount(4, $valid, 'set all filters');
-        $this->assertEquals([42, 42, 0], $valid['name1'], 'existing param: is array');
-        $this->assertEquals([0], $valid['name2'], 'existing param: from scalar to array, use flags');
-        $this->assertEquals(42, $valid['empty1'], 'missing param: use default, ignore flags (VA-addition)');
-        $this->assertEquals(null, $valid['empty2'], 'missing param: default null, ignore flags');
-        $this->assertEquals(null, $valid['missing'] ?? null, 'undeclared param: set null');
+        $this->assertSame([42, 42, 0], $valid['name1'], 'existing param: is array');
+        $this->assertSame([0], $valid['name2'], 'existing param: from scalar to array, use flags');
+        $this->assertSame(42, $valid['empty1'], 'missing param: use default, ignore flags (VA-addition)');
+        $this->assertSame(null, $valid['empty2'], 'missing param: default null, ignore flags');
+        $this->assertSame(null, $valid['missing'] ?? null, 'undeclared param: set null');
     }
 
-    public function testValidArrayCallback()
+    /**
+     * @covers ValidArray
+     */
+    public function testFilterCallback()
     {
         $filter = [
             'cb' => [
                 'filter' => FILTER_CALLBACK,
                 'flags' => FILTER_FORCE_ARRAY, // ignored
                 'options' => fn($v) => 42,
-            ]
+            ],
         ];
 
         $valid1 = new ValidArray($filter, ['cb' => 1, 'X' => 1, 'Y' => 1]);
-        $this->assertCount(1, $valid1);
-        $this->assertEquals(42, $valid1['cb'], 'existing param: run callback, ignore flags');
+        $this->assertSame(42, $valid1['cb'], 'existing param: run callback, ignore flags');
         unset($valid1['cb']);
-        $this->assertCount(1, $valid1);
         $this->assertNull($valid1['cb'], 'unset param: null');
         $valid1['X'] = 12;
-        $this->assertCount(1, $valid1);
         $this->assertNull($valid1['X'] ?? null, 'ignore undefined param');
         $valid1['cb'] = 12;
-        $this->assertCount(1, $valid1);
-        $this->assertEquals(42, $valid1['cb'], 'set existing param: run callback, ignore flags');
+        $this->assertSame(42, $valid1['cb'], 'set existing param: run callback, ignore flags');
 
         $valid2 = new ValidArray($filter, ['X' => 1, 'Y' => 1]);
-        $this->assertEquals(null, $valid2['cb'], 'undeclared param: set null, ignore callback, ignore flags');
+        $this->assertSame(null, $valid2['cb'], 'undeclared param: set null, ignore callback, ignore flags');
     }
 
-    public function testValidArrayExtendedCallback()
+    /**
+     * @covers ValidArray::FILTER_EXTENDED_CALLBACK
+     * @dataProvider providerFilterExtendedCallback
+     */
+    public function testFilterExtendedCallback($default, $flags, $value, $expected)
     {
-        $filter = [
-            'cb' => [
+        $filters = [
+            'cbk' => [
                 'filter' => ValidArray::FILTER_EXTENDED_CALLBACK,
-                'flags' => FILTER_FORCE_ARRAY,
-                'options' => ['callback' => fn($v) => 42, 'default' => 35],
-            ]
+                'flags' => $flags,
+                'options' => ['callback' => fn ($v) => is_numeric($v) ? $v + 1 : false],
+            ],
         ];
+        $values = ['X' => 1];
+        if ('UNDEFINED' !== $default) {
+            $filters['cbk']['options']['default'] = $default;
+        }
+        if ('UNDEFINED' !== $value) {
+            $values['cbk'] = $value;
+        }
 
-        $valid1 = new ValidArray($filter, ['cb' => [1, [2, 3], 4], 'X' => 1, 'Y' => 1]);
-        $this->assertCount(1, $valid1);
-        $this->assertEquals([42, [42, 42], 42], $valid1['cb'], 'existing param: run callback, use flags (VA-addition)');
-        unset($valid1['cb']);
-        $this->assertCount(1, $valid1);
-        $this->assertEquals(35, $valid1['cb'], 'unset param: use default, ignore flags (VA-addition)');
-        $valid1['cb'] = 12;
-        $this->assertCount(1, $valid1);
-        $this->assertEquals([42], $valid1['cb'], 'set existing param: run callback, use flags (VA-addition)');
+        $valid = new ValidArray($filters, $values);
+        $this->assertSame($expected, $valid['cbk'], 'expected value after init');
 
-        $valid2 = new ValidArray($filter, ['X' => 1, 'Y' => 1]);
-        $this->assertCount(1, $valid2);
-        $this->assertEquals(35, $valid2['cb'], 'undeclared param: use default, ignore flags (VA-addition)');
+        if ('UNDEFINED' !== $default) {
+            unset($valid['cbk']);
+            $this->assertSame($default, $valid['cbk'], 'default or null on unset (VA-addition)');
+        }
+
+        if ('UNDEFINED' !== $value) {
+            $valid['cbk'] = $value;
+            $this->assertSame($expected, $valid['cbk'], 'expected value after set');
+        }
+    }
+
+    public static function providerFilterExtendedCallback(): array
+    {
+        $stdClass = (object)[];
+
+        return [
+            // FILTER_EXTENDED_CALLBACK
+
+            'undefined param: use default or set null' =>
+                ['X', FILTER_REQUIRE_SCALAR, 'UNDEFINED', 'X'],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR, 'UNDEFINED', null],
+            'null: use default or set null' =>
+                ['X', FILTER_REQUIRE_SCALAR, null, 'X'],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR, null, false],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR|FILTER_NULL_ON_FAILURE, null, null],
+            'false: use default or set false' =>
+                ['X', FILTER_REQUIRE_SCALAR, false, 'X'],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR, false, false],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR|FILTER_NULL_ON_FAILURE, false, null],
+            'string: use default or set false' =>
+                ['X', FILTER_REQUIRE_SCALAR, '?', 'X'],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR, '?', false],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR|FILTER_NULL_ON_FAILURE, '?', null],
+            'int: run callback' =>
+                ['X', FILTER_REQUIRE_SCALAR, 42, 43],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR, 42, 43],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR|FILTER_NULL_ON_FAILURE, 42, 43],
+            'objects: keep object or replace with default' =>
+                ['X', FILTER_REQUIRE_SCALAR, $stdClass, 'X'],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR, $stdClass, false],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR|FILTER_NULL_ON_FAILURE, $stdClass, null],
+
+            'array (empty): keep empty array' =>
+                ['X', FILTER_REQUIRE_ARRAY, [], []],
+                ['UNDEFINED', FILTER_REQUIRE_ARRAY, [], []],
+            'array (objects or scalars): only keep matching elements, replace others with default' =>
+                ['X', FILTER_REQUIRE_ARRAY, [$stdClass, ['test', null], [42, false]], ['X', ['X', 'X'], [43, 'X']]],
+                ['UNDEFINED', FILTER_REQUIRE_ARRAY, [$stdClass, ['test', null], [42, false]], [false, [false, false], [43, false]]],
+        ];
+    }
+
+    /**
+     * @covers ValidArray::FILTER_INSTANCE_OF
+     * @dataProvider providerFilterInstanceOf
+     */
+    public function testFilterInstanceOf($default, $flags, $value, $expected)
+    {
+        $filters = [
+            'cls' => [
+                'filter' => ValidArray::FILTER_INSTANCE_OF,
+                'flags' => $flags,
+                'options' => ['class_name' => SplDoublyLinkedList::class],
+            ],
+        ];
+        $values = ['X' => 1];
+        if ('UNDEFINED' !== $default) {
+            $filters['cls']['options']['default'] = $default;
+        }
+        if ('UNDEFINED' !== $value) {
+            $values['cls'] = $value;
+        }
+
+        $valid = new ValidArray($filters, $values);
+        $this->assertSame($expected, $valid['cls'], 'expected value after init');
+
+        if ('UNDEFINED' !== $default) {
+            unset($valid['cls']);
+            $this->assertSame($default, $valid['cls'], 'default or null on unset (VA-addition)');
+        }
+
+        if ('UNDEFINED' !== $value) {
+            $valid['cls'] = $value;
+            $this->assertSame($expected, $valid['cls'], 'expected value after set');
+        }
+    }
+
+    public static function providerFilterInstanceOf(): array
+    {
+        $stdClass = (object)[];
+        $parent = new SplDoublyLinkedList();
+        $child = new SplStack();
+
+        return [
+            // FILTER_CLASS
+
+            'undefined param: use default or set null' =>
+                ['X', FILTER_REQUIRE_SCALAR, 'UNDEFINED', 'X'],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR, 'UNDEFINED', null],
+            'null: use default or set null' =>
+                ['X', FILTER_REQUIRE_SCALAR, null, 'X'],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR, null, false],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR|FILTER_NULL_ON_FAILURE, null, null],
+            'false: use default or set false' =>
+                ['X', FILTER_REQUIRE_SCALAR, false, 'X'],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR, false, false],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR|FILTER_NULL_ON_FAILURE, false, null],
+            'string: use default or set false' =>
+                ['X', FILTER_REQUIRE_SCALAR, '?', 'X'],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR, '?', false],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR|FILTER_NULL_ON_FAILURE, '?', null],
+            'objects: keep object or replace with default' =>
+                ['X', FILTER_REQUIRE_SCALAR, $parent, $parent],
+                ['X', FILTER_REQUIRE_SCALAR, $child, $child],
+                ['X', FILTER_REQUIRE_SCALAR, $stdClass, 'X'],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR, $stdClass, false],
+                ['UNDEFINED', FILTER_REQUIRE_SCALAR|FILTER_NULL_ON_FAILURE, $stdClass, null],
+
+            'array (empty): keep empty array' =>
+                ['X', FILTER_REQUIRE_ARRAY, [], []],
+                ['UNDEFINED', FILTER_REQUIRE_ARRAY, [], []],
+            'array (objects or scalars): only keep matching objects, replace other elements with default' =>
+                ['X', FILTER_REQUIRE_ARRAY, [$child, $parent, ['test', null], [$stdClass, false]], [$child, $parent, ['X', 'X'], ['X', 'X']]],
+                ['UNDEFINED', FILTER_REQUIRE_ARRAY, [$child, $parent, ['test', null], [$stdClass, false]], [$child, $parent, [false, false], [false, false]]],
+        ];
     }
 }
